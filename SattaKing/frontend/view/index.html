@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SattaKing - Professional Results Dashboard</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .dashboard-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/><circle cx="10" cy="60" r="0.5" fill="white" opacity="0.1"/><circle cx="90" cy="40" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+      opacity: 0.3;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header p {
+      font-size: 1.1rem;
+      opacity: 0.9;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 30px;
+      background: #f8f9fa;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-icon {
+      font-size: 2.5rem;
+      margin-bottom: 15px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      color: #7f8c8d;
+      font-weight: 500;
+    }
+
+    .table-container {
+      padding: 30px;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+    }
+
+    .table-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .results-table {
+      width: 100%;
+      background: white;
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .results-table thead {
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      color: white;
+    }
+
+    .results-table th {
+      padding: 20px;
+      font-weight: 600;
+      text-align: left;
+      font-size: 1rem;
+    }
+
+    .results-table td {
+      padding: 20px;
+      border-bottom: 1px solid #ecf0f1;
+      transition: background-color 0.3s ease;
+    }
+
+    .results-table tbody tr:hover {
+      background-color: #f8f9fa;
+    }
+
+    .result-name {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 1.1rem;
+    }
+
+    .result-value {
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: #27ae60;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      display: inline-block;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .result-value:hover {
+      background-color: #e8f5e8;
+      transform: scale(1.05);
+    }
+
+    .result-time {
+      color: #7f8c8d;
+      font-weight: 500;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #7f8c8d;
+    }
+
+    .loading i {
+      font-size: 2rem;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .edit-input {
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      text-align: center;
+      width: 80px;
+      outline: none;
+    }
+
+    .edit-input:focus {
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Mobile Edit Modal Styles */
+    .edit-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .edit-modal.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .edit-modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 400px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      transform: scale(0.8);
+      transition: transform 0.3s ease;
+    }
+
+    .edit-modal.show .edit-modal-content {
+      transform: scale(1);
+    }
+
+    .edit-modal-header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .edit-modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #2c3e50;
+      margin-bottom: 8px;
+    }
+
+    .edit-modal-subtitle {
+      color: #7f8c8d;
+      font-size: 1rem;
+    }
+
+    .edit-form-group {
+      margin-bottom: 20px;
+    }
+
+    .edit-form-label {
+      display: block;
+      font-weight: 500;
+      color: #2c3e50;
+      margin-bottom: 8px;
+      font-size: 1rem;
+    }
+
+    .edit-form-input {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #ecf0f1;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: 600;
+      text-align: center;
+      outline: none;
+      transition: all 0.3s ease;
+      background: #f8f9fa;
+    }
+
+    .edit-form-input:focus {
+      border-color: #667eea;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .edit-modal-buttons {
+      display: flex;
+      gap: 15px;
+      margin-top: 30px;
+    }
+
+    .edit-btn {
+      flex: 1;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .edit-btn-save {
+      background: linear-gradient(135deg, #27ae60, #2ecc71);
+      color: white;
+    }
+
+    .edit-btn-save:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+    }
+
+    .edit-btn-cancel {
+      background: #ecf0f1;
+      color: #7f8c8d;
+    }
+
+    .edit-btn-cancel:hover {
+      background: #d5dbdb;
+      transform: translateY(-2px);
+    }
+
+    .edit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Quick Edit Button */
+    .quick-edit-btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-left: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .quick-edit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Touch-friendly result values */
+    .result-value {
+      position: relative;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .result-value:hover .quick-edit-btn {
+      opacity: 1;
+    }
+
+    .quick-edit-btn {
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .edit-modal-content {
+        margin: 20px;
+        padding: 25px;
+        width: calc(100% - 40px);
+      }
+
+      .edit-modal-title {
+        font-size: 1.3rem;
+      }
+
+      .edit-form-input {
+        padding: 18px;
+        font-size: 1.3rem;
+      }
+
+      .edit-btn {
+        padding: 18px;
+        font-size: 1.1rem;
+      }
+
+      .quick-edit-btn {
+        opacity: 1;
+        padding: 10px 14px;
+        font-size: 1rem;
+      }
+
+      .result-value {
+        min-height: 50px;
+        padding: 12px;
+      }
+
+      .results-table th,
+      .results-table td {
+        padding: 15px 8px;
+      }
+    }
+
+    /* Loading state for edit */
+    .edit-loading {
+      position: relative;
+    }
+
+    .edit-loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .success-message {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #27ae60;
+      color: white;
+      padding: 15px 25px;
+      border-radius: 10px;
+      box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+      z-index: 1000;
+      transform: translateX(400px);
+      transition: transform 0.3s ease;
+    }
+
+    .success-message.show {
+      transform: translateX(0);
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 2rem;
+      }
+      
+      .stats-container {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 20px;
+      }
+      
+      .table-container {
+        padding: 20px;
+      }
+      
+      .results-table th,
+      .results-table td {
+        padding: 15px 10px;
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <div class="header">
+      <h1><i class="fas fa-crown"></i> SattaKing Dashboard</h1>
+      <p>Professional Results Management System</p>
+    </div>
+
+    <div class="stats-container">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="stat-number" id="totalResults">0</div>
+        <div class="stat-label">Total Results</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-number" id="activeResults">0</div>
+        <div class="stat-label">Active Results</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-trophy"></i>
+        </div>
+        <div class="stat-number" id="topResults">0</div>
+        <div class="stat-label">Top Results</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <div class="table-header">
+        <h2 class="table-title">Daily Results</h2>
+        <button class="refresh-btn" onclick="loadResults()">
+          <i class="fas fa-sync-alt"></i>
+          Refresh
+        </button>
+      </div>
+      
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th><i class="fas fa-tag"></i> Result Name</th>
+            <th><i class="fas fa-calendar-day"></i> Today Result</th>
+            <th><i class="fas fa-history"></i> Last Result</th>
+            <th><i class="fas fa-clock"></i> Result Time</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr>
+            <td colspan="4" class="loading">
+              <i class="fas fa-spinner"></i>
+              <br>Loading results...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="success-message" id="successMessage">
+    <i class="fas fa-check-circle"></i>
+    Result updated successfully!
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="edit-modal" id="editModal">
+    <div class="edit-modal-content">
+      <div class="edit-modal-header">
+        <h3 class="edit-modal-title" id="editModalTitle">Edit Result</h3>
+        <p class="edit-modal-subtitle" id="editModalSubtitle">Update the result value</p>
+      </div>
+      
+      <form id="editForm">
+        <div class="edit-form-group">
+          <label class="edit-form-label" for="editResultInput">New Value</label>
+          <input 
+            type="text" 
+            id="editResultInput" 
+            class="edit-form-input" 
+            placeholder="Enter new value"
+            maxlength="10"
+            autocomplete="off"
+          >
+        </div>
+        
+        <div class="edit-modal-buttons">
+          <button type="button" class="edit-btn edit-btn-cancel" id="cancelEditBtn">
+            <i class="fas fa-times"></i>
+            Cancel
+          </button>
+          <button type="submit" class="edit-btn edit-btn-save" id="saveEditBtn">
+            <i class="fas fa-save"></i>
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script type="text/javascript">
+  let resultsData = [];
+
+  function loadResults() {
+    $('#tableBody').html(`
+      <tr>
+        <td colspan="4" class="loading">
+          <i class="fas fa-spinner"></i>
+          <br>Loading results...
+        </td>
+      </tr>
+    `);
+
+    $.ajax({
+      url: 'http://localhost:3000/SattaKing/dailyKhabar',
+      success: function(result) {
+        resultsData = result.DailyKhabar || [];
+        displayResults(resultsData);
+        updateStats(resultsData);
+      },
+      error: function() {
+        $('#tableBody').html(`
+          <tr>
+            <td colspan="4" class="loading">
+              <i class="fas fa-exclamation-triangle"></i>
+              <br>Error loading results
+            </td>
+          </tr>
+        `);
+      }
+    });
+  }
+
+  function displayResults(data) {
+    if (data.length === 0) {
+      $('#tableBody').html(`
+        <tr>
+          <td colspan="4" class="loading">
+            <i class="fas fa-inbox"></i>
+            <br>No results found
+          </td>
+        </tr>
+      `);
+      return;
+    }
+
+    let html = '';
+    data.forEach((item) => {
+      const topClass = item.top ? 'style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white;"' : '';
+      html += `
+        <tr ${topClass}>
+          <td class="result-name">
+            <i class="fas fa-star" style="color: #f39c12; margin-right: 8px;"></i>
+            ${item.resultName || 'N/A'}
+          </td>
+          <td>
+            <div class="result-value">
+              <span class="result-display">${item.todayResult || '--'}</span>
+              <button class="quick-edit-btn" onclick="openEditModal('${item._id}', 'today', '${item.resultName}', '${item.todayResult || ''}')">
+                <i class="fas fa-edit"></i>
+                Edit
+              </button>
+            </div>
+          </td>
+          <td>
+            <div class="result-value">
+              <span class="result-display">${item.lastResult || '--'}</span>
+              <button class="quick-edit-btn" onclick="openEditModal('${item._id}', 'last', '${item.resultName}', '${item.lastResult || ''}')">
+                <i class="fas fa-edit"></i>
+                Edit
+              </button>
+            </div>
+          </td>
+          <td class="result-time">
+            <i class="fas fa-clock" style="margin-right: 5px;"></i>
+            ${item.resultTime || 'N/A'}
+          </td>
+        </tr>
+      `;
+    });
+    $('#tableBody').html(html);
+  }
+
+  function updateStats(data) {
+    const totalResults = data.length;
+    const activeResults = data.filter(item => item.todayResult || item.lastResult).length;
+    const topResults = data.filter(item => item.top).length;
+
+    $('#totalResults').text(totalResults);
+    $('#activeResults').text(activeResults);
+    $('#topResults').text(topResults);
+  }
+
+  function showSuccessMessage() {
+    const message = document.getElementById('successMessage');
+    message.classList.add('show');
+    setTimeout(() => {
+      message.classList.remove('show');
+    }, 3000);
+  }
+
+  // Modal-based edit system
+  let currentEditData = {};
+
+  function openEditModal(id, type, resultName, currentValue) {
+    currentEditData = {
+      id: id,
+      type: type,
+      resultName: resultName,
+      currentValue: currentValue
+    };
+
+    const typeLabel = type === 'today' ? 'Today Result' : 'Last Result';
+    $('#editModalTitle').text(`Edit ${typeLabel}`);
+    $('#editModalSubtitle').text(`Update ${resultName} - ${typeLabel}`);
+    $('#editResultInput').val(currentValue);
+    
+    // Show modal
+    $('#editModal').addClass('show');
+    
+    // Focus input and select text
+    setTimeout(() => {
+      $('#editResultInput').focus().select();
+    }, 300);
+  }
+
+  function closeEditModal() {
+    $('#editModal').removeClass('show');
+    currentEditData = {};
+    $('#editResultInput').val('');
+  }
+
+  function updateResult(newValue) {
+    if (!currentEditData.id) return;
+
+    // Disable buttons and show loading
+    $('#saveEditBtn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Saving...');
+    $('#cancelEditBtn').prop('disabled', true);
+
+    $.ajax({
+      type: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({
+        KhabarID: currentEditData.id,
+        KhabarNo: newValue,
+        KhabarType: currentEditData.type
+      }),
+      url: 'http://localhost:3000/SattaKing/updateKhabar',
+      success: function(result) {
+        showSuccessMessage();
+        closeEditModal();
+        
+        // Reload data to get updated stats
+        setTimeout(() => {
+          loadResults();
+        }, 500);
+      },
+      error: function() {
+        alert('Error updating result. Please try again.');
+        $('#saveEditBtn').prop('disabled', false).html('<i class="fas fa-save"></i> Save');
+        $('#cancelEditBtn').prop('disabled', false);
+      }
+    });
+  }
+
+  // Modal event handlers
+  $('#editForm').on('submit', function(e) {
+    e.preventDefault();
+    const newValue = $('#editResultInput').val().trim();
+    
+    if (newValue && newValue !== currentEditData.currentValue) {
+      updateResult(newValue);
+    } else {
+      closeEditModal();
+    }
+  });
+
+  $('#cancelEditBtn').on('click', function() {
+    closeEditModal();
+  });
+
+  // Close modal when clicking outside
+  $('#editModal').on('click', function(e) {
+    if (e.target === this) {
+      closeEditModal();
+    }
+  });
+
+  // Handle escape key
+  $(document).on('keydown', function(e) {
+    if (e.keyCode === 27 && $('#editModal').hasClass('show')) { // Escape key
+      closeEditModal();
+    }
+  });
+
+  // Handle enter key in input
+  $('#editResultInput').on('keydown', function(e) {
+    if (e.keyCode === 13) { // Enter key
+      e.preventDefault();
+      $('#editForm').submit();
+    }
+  });
+
+  // Initialize on page load
+  $(document).ready(function() {
+    loadResults();
+  });
+</script>
+</html>
