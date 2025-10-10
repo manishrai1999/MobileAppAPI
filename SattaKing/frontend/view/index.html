@@ -620,7 +620,7 @@
     `);
 
     $.ajax({
-      url: 'http://localhost:3000/SattaKing/dailyKhabar',
+      url: 'https://mobile-app-api-opal.vercel.app/SattaKing/dailyKhabar',
       success: function(result) {
         resultsData = result.DailyKhabar || [];
         displayResults(resultsData);
