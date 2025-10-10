@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const URL = process.env.DATABASE;
+const URL = 'mongodb+srv://SattaKing:Kaka5611@cluster0.gzspqod.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 
 mongoose.connect(URL,{
     useNewUrlParser: true,
