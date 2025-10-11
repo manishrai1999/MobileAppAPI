@@ -2,6 +2,7 @@ const Khabar = require("../modals/khabar.model");
 const Image = require("../modals/image.model");
 const Lucky = require("../modals/luckynumber.model");
 const SingleJodi = require("../modals/singlejodi.model");
+const MonthlyChart = require("../modals/monthlychart.model");
 
 const getDailyKhabars = async (req, res) => {
   Khabar.find()
@@ -65,6 +66,54 @@ const createLuckyNumber = async (req, res) => {
   return res.json("Lucky number created successfully");
 };
 
+const getMonthWiseChart = async (req, res) => {
+  try {
+    const { month, fullYear } = req.query;
+    
+    if (!month || !fullYear) {
+      return res.status(400).json({ 
+        error: "Month and fullYear parameters are required" 
+      });
+    }
+
+    const date = month + '-' + fullYear;
+    
+    const chartData = await MonthlyChart.find({
+      date: { $regex: date }
+    });
+
+    return res.status(200).json({ 
+      monthlyChart: chartData,
+      month: month,
+      year: fullYear,
+      searchPattern: date
+    });
+
+  } catch (error) {
+    console.log("Error fetching monthly chart:", error);
+    return res.status(500).json({ 
+      error: "Internal server error while fetching monthly chart data" 
+    });
+  }
+};
+
+const createSampleMonthlyChart = async (req, res) => {
+  try {
+    const sampleData = new MonthlyChart({
+      date: '12-2024',
+      // Add other fields as needed
+    });
+    
+    await sampleData.save();
+    return res.json("Sample monthly chart data created successfully");
+  } catch (error) {
+    console.log("Error creating sample monthly chart:", error);
+    return res.status(500).json({ 
+      error: "Error creating sample monthly chart data" 
+    });
+  }
+};
+
 const updateDailyKhabar = async (req, res) => {
   const { KhabarID, KhabarNo, KhabarType } = req.body;
   if (KhabarType == "today") {
@@ -95,4 +144,4 @@ const updateDailyKhabar = async (req, res) => {
   }
 };
 
-module.exports = { getDailyKhabars, getImageBanner, getLuckyNumber, createLuckyNumber, updateDailyKhabar, newSingleJodi, getSingleJodi };
+module.exports = { getDailyKhabars, getImageBanner, getLuckyNumber, createLuckyNumber, getMonthWiseChart, createSampleMonthlyChart, updateDailyKhabar, newSingleJodi, getSingleJodi };
