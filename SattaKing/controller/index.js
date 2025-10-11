@@ -3,41 +3,13 @@ const Image = require("../modals/image.model");
 const Lucky = require("../modals/luckynumber.model");
 const SingleJodi = require("../modals/singlejodi.model");
 const MonthlyChart = require("../modals/monthlychart.model");
+const YearlyChart = require("../modals/yearlychart.model");
 
 const getDailyKhabars = async (req, res) => {
   Khabar.find()
     .sort({ top: -1 })
     .then((items) => {
       return res.status(200).json({ DailyKhabar: items });
-    })
-    .catch(function () {
-      console.log("error");
-    });
-};
-
-const newSingleJodi = async (req, res) => {
-  const singleJodi = new SingleJodi({
-    khabarName:'SattaKing',
-    singleJodi:65
-  });
-  singleJodi.save();
-  return res.json("ok");
-};
-
-const getSingleJodi = async (req, res) => {
-  SingleJodi.find()
-    .then((items) => {
-      return res.status(200).json({ singleJodi: items });
-    })
-    .catch(function () {
-      console.log("error");
-    });
-};
-
-const getImageBanner = async (req, res) => {
-  Image.find()
-    .then((items) => {
-      return res.status(200).json({ imageBanner: items });
     })
     .catch(function () {
       console.log("error");
@@ -52,18 +24,6 @@ const getLuckyNumber = async (req, res) => {
     .catch(function () {
       console.log("reject");
     });
-};
-
-const createLuckyNumber = async (req, res) => {
-  const luckyNumber = new Lucky({
-    cardTitle: 'Single Jodi(सिंगल जोड़ी)',
-    number: '65 - 77',
-    isReveled: false,
-    isBtn: false,
-    adUnit: 'ca-app-pub-9210620605814123/1167024627'
-  });
-  luckyNumber.save();
-  return res.json("Lucky number created successfully");
 };
 
 const getMonthWiseChart = async (req, res) => {
@@ -97,19 +57,32 @@ const getMonthWiseChart = async (req, res) => {
   }
 };
 
-const createSampleMonthlyChart = async (req, res) => {
+const getYearWiseChart = async (req, res) => {
   try {
-    const sampleData = new MonthlyChart({
-      date: '12-2024',
-      // Add other fields as needed
-    });
+    const { year, newsName } = req.query;
     
-    await sampleData.save();
-    return res.json("Sample monthly chart data created successfully");
+    if (!year || !newsName) {
+      return res.status(400).json({ 
+        error: "Year and newsName parameters are required" 
+      });
+    }
+
+    // Find documents where both year and newsName match
+    const chartData = await YearlyChart.find({
+      year: year,
+      newsName: newsName
+    });
+
+    return res.status(200).json({ 
+      yearlyChart: chartData,
+      year: year,
+      newsName: newsName
+    });
+
   } catch (error) {
-    console.log("Error creating sample monthly chart:", error);
+    console.log("Error fetching yearly chart:", error);
     return res.status(500).json({ 
-      error: "Error creating sample monthly chart data" 
+      error: "Internal server error while fetching yearly chart data" 
     });
   }
 };
@@ -144,4 +117,4 @@ const updateDailyKhabar = async (req, res) => {
   }
 };
 
-module.exports = { getDailyKhabars, getImageBanner, getLuckyNumber, createLuckyNumber, getMonthWiseChart, createSampleMonthlyChart, updateDailyKhabar, newSingleJodi, getSingleJodi };
+module.exports = { getDailyKhabars, getLuckyNumber, getMonthWiseChart, getYearWiseChart, updateDailyKhabar };
