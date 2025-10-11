@@ -14,4 +14,4 @@ app.use('/',require('./DeshawarKing/frontend'));
 app.use('/sattaking',require('./SattaKing/frontend'));
 app.use("/DeshawarKing", DeshawarKing);
 app.use("/SattaKing", SattaKing);
-app.listen(process.env.PORT || 3001);
+app.listen(process.env.PORT || 3000);
