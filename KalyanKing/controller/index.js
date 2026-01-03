@@ -1,4 +1,5 @@
 const LiveResult = require("../modals/liveresult.model");
+const LuckyNumber = require("../modals/luckynumber.model");
 
 const getLiveResults = async (req, res) => {
   LiveResult.find()
@@ -8,6 +9,16 @@ const getLiveResults = async (req, res) => {
     })
     .catch(function () {
       console.log("error");
+    });
+};
+
+const getLuckyNumber = async (req, res) => {
+  LuckyNumber.find()
+    .then((data) => {
+      return res.status(200).json({ LuckyNumber: data });
+    })
+    .catch(function () {
+      console.log("reject");
     });
 };
 
@@ -41,5 +52,5 @@ const updateLiveResult = async (req, res) => {
   }
 };
 
-module.exports = { getLiveResults, updateLiveResult };
+module.exports = { getLiveResults, updateLiveResult, getLuckyNumber };
 
