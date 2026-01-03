@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KalyanKing - Live Results Dashboard</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .dashboard-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header p {
+      font-size: 1.1rem;
+      opacity: 0.9;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 30px;
+      background: #f8f9fa;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-icon {
+      font-size: 2.5rem;
+      margin-bottom: 15px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2c3e50;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      color: #7f8c8d;
+      font-weight: 500;
+    }
+
+    .table-container {
+      padding: 30px;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+    }
+
+    .table-title {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .results-table {
+      width: 100%;
+      background: white;
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .results-table thead {
+      background: linear-gradient(135deg, #2c3e50, #34495e);
+      color: white;
+    }
+
+    .results-table th {
+      padding: 20px;
+      font-weight: 600;
+      text-align: left;
+      font-size: 1rem;
+    }
+
+    .results-table td {
+      padding: 20px;
+      border-bottom: 1px solid #ecf0f1;
+      transition: background-color 0.3s ease;
+    }
+
+    .results-table tbody tr:hover {
+      background-color: #f8f9fa;
+    }
+
+    .result-name {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 1.1rem;
+    }
+
+    .result-value {
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: #27ae60;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      display: inline-block;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .result-time {
+      color: #7f8c8d;
+      font-weight: 500;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #7f8c8d;
+    }
+
+    .loading i {
+      font-size: 2rem;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .edit-btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-left: 8px;
+    }
+
+    .edit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 2rem;
+      }
+      
+      .stats-container {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 20px;
+      }
+      
+      .table-container {
+        padding: 20px;
+      }
+      
+      .results-table th,
+      .results-table td {
+        padding: 15px 10px;
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <div class="header">
+      <h1><i class="fas fa-crown"></i> KalyanKing Dashboard</h1>
+      <p>Live Results Management System</p>
+    </div>
+
+    <div class="stats-container">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="stat-number" id="totalResults">0</div>
+        <div class="stat-label">Total Results</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-number" id="activeResults">0</div>
+        <div class="stat-label">Active Results</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-trophy"></i>
+        </div>
+        <div class="stat-number" id="topResults">0</div>
+        <div class="stat-label">Top Results</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <div class="table-header">
+        <h2 class="table-title">Live Results</h2>
+        <button class="refresh-btn" onclick="loadResults()">
+          <i class="fas fa-sync-alt"></i>
+          Refresh
+        </button>
+      </div>
+      
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th><i class="fas fa-tag"></i> Result Name</th>
+            <th><i class="fas fa-calendar-day"></i> Today Result</th>
+            <th><i class="fas fa-history"></i> Last Result</th>
+            <th><i class="fas fa-clock"></i> Result Time</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr>
+            <td colspan="4" class="loading">
+              <i class="fas fa-spinner"></i>
+              <br>Loading results...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script type="text/javascript">
+  let resultsData = [];
+
+  function loadResults() {
+    $('#tableBody').html(`
+      <tr>
+        <td colspan="4" class="loading">
+          <i class="fas fa-spinner"></i>
+          <br>Loading results...
+        </td>
+      </tr>
+    `);
+
+    $.ajax({
+      url: '/KalyanKing/liveResults',
+      success: function(result) {
+        resultsData = result.liveResults || [];
+        displayResults(resultsData);
+        updateStats(resultsData);
+      },
+      error: function() {
+        $('#tableBody').html(`
+          <tr>
+            <td colspan="4" class="loading">
+              <i class="fas fa-exclamation-triangle"></i>
+              <br>Error loading results
+            </td>
+          </tr>
+        `);
+      }
+    });
+  }
+
+  function displayResults(data) {
+    if (data.length === 0) {
+      $('#tableBody').html(`
+        <tr>
+          <td colspan="4" class="loading">
+            <i class="fas fa-inbox"></i>
+            <br>No results found
+          </td>
+        </tr>
+      `);
+      return;
+    }
+
+    let html = '';
+    data.forEach((item) => {
+      const topClass = item.isTop ? 'style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white;"' : '';
+      html += `
+        <tr ${topClass}>
+          <td class="result-name">
+            <i class="fas fa-star" style="color: #f39c12; margin-right: 8px;"></i>
+            ${item.resultName || 'N/A'}
+          </td>
+          <td>
+            <span class="result-value">${item.todayResult || '--'}</span>
+          </td>
+          <td>
+            <span class="result-value">${item.lastResult || '--'}</span>
+          </td>
+          <td class="result-time">
+            <i class="fas fa-clock" style="margin-right: 5px;"></i>
+            ${item.resultTime || 'N/A'}
+          </td>
+        </tr>
+      `;
+    });
+    $('#tableBody').html(html);
+  }
+
+  function updateStats(data) {
+    const totalResults = data.length;
+    const activeResults = data.filter(item => item.todayResult || item.lastResult).length;
+    const topResults = data.filter(item => item.isTop).length;
+
+    $('#totalResults').text(totalResults);
+    $('#activeResults').text(activeResults);
+    $('#topResults').text(topResults);
+  }
+
+  // Initialize on page load
+  $(document).ready(function() {
+    loadResults();
+  });
+</script>
+</html>
+
