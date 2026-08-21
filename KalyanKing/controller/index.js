@@ -11,6 +11,7 @@ const {
   describeChartPage,
   matchMarketsToChartLinks,
   updateChartsForMarkets,
+  cleanupSupersededChartRows,
 } = require("../../KalyanChartScraper");
 
 const getLiveResults = async (req, res) => {
@@ -234,6 +235,21 @@ const autoUpdateHistoricalChart = async (req, res) => {
   }
 };
 
+/**
+ * Delete legacy chart rows the scrape has already replaced.
+ *   GET /KalyanKing/cleanupHistoricalChart?apply=true
+ * Dry-run without apply=true.
+ */
+const cleanupHistoricalChart = async (req, res) => {
+  try {
+    const report = await cleanupSupersededChartRows({ apply: req.query.apply === "true" });
+    return res.status(200).json(report);
+  } catch (error) {
+    console.error("Historical chart cleanup failed:", error.message);
+    return res.status(500).json({ message: "Cleanup failed", error: error.message });
+  }
+};
+
 const probeSource = async (req, res) => {
   try {
     const report = await probeSourceVsDatabase();
@@ -248,6 +264,7 @@ module.exports = {
   probeSource,
   probeChartSource,
   autoUpdateHistoricalChart,
+  cleanupHistoricalChart,
   getLiveResults,
   updateLiveResult,
   getLuckyNumber,

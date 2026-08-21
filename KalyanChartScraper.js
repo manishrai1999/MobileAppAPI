@@ -634,3 +634,77 @@ async function updateChartsForMarkets(marketNames, options = {}) {
 
 module.exports.chartUrlFor = chartUrlFor;
 module.exports.updateChartsForMarkets = updateChartsForMarkets;
+
+/**
+ * Remove legacy rows that the scrape has superseded.
+ *
+ * The collection predates the scraper and its dateRange format is not
+ * consistent: some hand-entered rows use "03/11/25 to 08/11/25" and others
+ * "27/04/2026 to 02/05/2026". The scraper normalises to the two-digit form, so
+ * upserts matched the first kind in place and duplicated the second — KALYAN
+ * April 2026 ended up with every week listed twice.
+ *
+ * Legacy rows are identifiable without guessing at formats: `index` was never
+ * written before the scraper existed, so any row missing it is hand-entered.
+ * A legacy row is only removed when a scraped row (index set) covers the same
+ * market and the same week, so nothing is deleted that isn't already replaced.
+ *
+ * Dry-run unless `apply` is true.
+ */
+async function cleanupSupersededChartRows({ apply = false } = {}) {
+  await ensureMongoConnected();
+
+  const legacy = await HistoricalChart.find({
+    $or: [{ index: { $exists: false } }, { index: null }],
+  })
+    .select("_id gameName dateRange")
+    .lean();
+
+  // Two-digit-year form of a dateRange, whatever form it arrived in.
+  const normalise = (range) =>
+    String(range || "").replace(/\b(\d{2})[/-](\d{2})[/-]\d{2}(\d{2})\b/g, "$1/$2/$3");
+
+  const superseded = [];
+  const orphans = [];
+
+  for (const row of legacy) {
+    const target = normalise(row.dateRange);
+    // eslint-disable-next-line no-await-in-loop
+    const replacement = await HistoricalChart.findOne({
+      gameName: row.gameName,
+      dateRange: target,
+      index: { $exists: true, $ne: null },
+    })
+      .select("_id")
+      .lean();
+
+    if (replacement) superseded.push(row);
+    else orphans.push({ gameName: row.gameName, dateRange: row.dateRange });
+  }
+
+  let deleted = 0;
+  if (apply && superseded.length > 0) {
+    const result = await HistoricalChart.deleteMany({
+      _id: { $in: superseded.map((row) => row._id) },
+    });
+    deleted = result.deletedCount || 0;
+  }
+
+  return {
+    applied: apply,
+    legacyRows: legacy.length,
+    supersededCount: superseded.length,
+    deleted,
+    // Legacy rows with NO scraped equivalent — a week the source no longer
+    // publishes. Left alone: deleting these would lose data, not de-duplicate.
+    orphanCount: orphans.length,
+    orphans: orphans.slice(0, 50),
+    sample: superseded.slice(0, 10).map((r) => ({
+      gameName: r.gameName,
+      legacy: r.dateRange,
+      replacedBy: normalise(r.dateRange),
+    })),
+  };
+}
+
+module.exports.cleanupSupersededChartRows = cleanupSupersededChartRows;

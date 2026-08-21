@@ -9,7 +9,8 @@ const {
   getHistoricalData,
   probeSource,
   probeChartSource,
-  autoUpdateHistoricalChart
+  autoUpdateHistoricalChart,
+  cleanupHistoricalChart
 } = require("../controller");
 
 router.get("/liveResults", getLiveResults);
@@ -34,6 +35,9 @@ router.get("/probeChartSource", probeChartSource);
 
 // Scrape + upsert the panel charts. Chunked via offset/limit — see controller.
 router.get("/autoUpdateHistoricalChart", autoUpdateHistoricalChart);
+
+// Remove legacy rows the scrape superseded. Dry-run unless ?apply=true.
+router.get("/cleanupHistoricalChart", cleanupHistoricalChart);
 
 module.exports = router;
 
