@@ -42,6 +42,10 @@ const REQUEST_HEADERS = {
 
 const TIMEOUT_MS = 30000;
 
+// Distinguishes the panel chart (top/main/bottom) from the jodi chart (main
+// only). The schema needs the panel.
+const PANEL_PATH_RE = /panel-chart-record/i;
+
 function cleanText(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
@@ -155,14 +159,25 @@ function matchMarketsToChartLinks(markets, chartLinks) {
   for (const link of chartLinks) {
     // The last path segment is the market identifier on every chart URL scheme
     // this source has used ("/panel-chart-record/kalyan.php" → "kalyan").
-    let segment = "";
+    let pathname = "";
     try {
-      segment = new URL(link.url).pathname.split("/").filter(Boolean).pop() || "";
+      pathname = new URL(link.url).pathname;
     } catch {
       continue;
     }
+    const segment = pathname.split("/").filter(Boolean).pop() || "";
     const key = slug(segment.replace(/\.(php|html?|aspx)$/i, ""));
-    if (key && !linkBySlug.has(key)) linkBySlug.set(key, link);
+    if (!key) continue;
+
+    // The source publishes BOTH a jodi chart and a panel chart per market, and
+    // lists jodi first. Only the panel chart carries the top/main/bottom
+    // triplet the historicalchart schema stores — a jodi page has just the
+    // two-digit number — so panel always wins regardless of link order.
+    const isPanel = PANEL_PATH_RE.test(pathname);
+    const existing = linkBySlug.get(key);
+    if (!existing || (isPanel && !PANEL_PATH_RE.test(new URL(existing.url).pathname))) {
+      linkBySlug.set(key, link);
+    }
   }
 
   const matched = [];
@@ -279,3 +294,343 @@ module.exports = {
   matchMarketsToChartLinks,
   isAllowedUrl,
 };
+
+// ───────────────────────────────────────────────────────────────────────────
+//  Parser + writer
+//
+//  Structure confirmed against the live source via probeChartSource:
+//
+//    table.panel-chart.chart-table
+//      row 0  : 7  cells — "Date", Mon, Tue, Wed, Thu, Fri, Sat
+//      row 1+ : 19 cells — 1 date cell, then 6 days x 3 (top, main, bottom)
+//
+//  Kalyan's page carries 202 rows going back to Oct 2022, so ONE fetch is a
+//  market's entire history. The backfill is therefore one pass per market, not
+//  a month-by-month crawl.
+//
+//  Days with no result publish as "* * *" / "**" (holiday, or not yet
+//  declared). Those are absent days, not data, and are omitted rather than
+//  stored as literal asterisks.
+// ───────────────────────────────────────────────────────────────────────────
+
+const mongoose = require("mongoose");
+const HistoricalChart = require("./KalyanKing/modals/historicalchart.model");
+
+// Markets do NOT all trade the same days, and the chart width follows:
+//   Kalyan Night   Mon–Fri  → 16 columns
+//   Kalyan         Mon–Sat  → 19 columns
+//   Milan Day      Mon–Sun  → 22 columns
+// So the day set is read off each page's header row rather than assumed. An
+// earlier hardcoded 19 would have silently rejected most of the 38 markets.
+const ALL_DAY_KEYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+const DAY_KEYS = ALL_DAY_KEYS;
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const CELLS_PER_DAY = 3; // top panna, main jodi, bottom panna
+
+async function ensureMongoConnected() {
+  if (mongoose.connection.readyState === 1) return;
+  if (mongoose.connection.readyState === 2) {
+    await mongoose.connection.asPromise();
+    return;
+  }
+  const mongoUrl = process.env.MONGODB_URI || process.env.DATABASE;
+  if (!mongoUrl) throw new Error("MONGODB_URI or DATABASE is missing in .env");
+  await mongoose.connect(mongoUrl);
+}
+
+/** "* * *" and "**" mean no result was published for that day. */
+function hasValue(text) {
+  const value = cleanText(text);
+  return value !== "" && !/^[*\s]+$/.test(value);
+}
+
+/**
+ * "7 8 0" -> ["7","8","0"]. The source separates panna digits with <br>.
+ *
+ * Accepts the unseparated form too. cheerio's .text() renders <br> as nothing,
+ * so "7<br>8<br>0" collapses to "780" — the live page only reads as "7 8 0"
+ * because it happens to have whitespace around its <br> tags. Relying on that
+ * whitespace means a cosmetic change at the source silently drops every panna
+ * in the chart, so handle both shapes.
+ */
+function parsePanna(text) {
+  if (!hasValue(text)) return null;
+
+  const spaced = cleanText(text).split(/\s+/).filter((d) => /^\d$/.test(d));
+  if (spaced.length === 3) return spaced;
+
+  const joined = cleanText(text).replace(/\s+/g, "");
+  if (/^\d{3}$/.test(joined)) return joined.split("");
+
+  return null;
+}
+
+/** "51" -> "51". A jodi is two digits. */
+function parseJodi(text) {
+  if (!hasValue(text)) return null;
+  const value = cleanText(text).replace(/\s+/g, "");
+  return /^\d{2}$/.test(value) ? value : null;
+}
+
+/**
+ * "17/10/2022 to 22/10/2022" -> start/end Dates plus the dd/mm/yy form.
+ *
+ * Stored as dd/mm/yy because that is what the rows already in the collection
+ * use, and dateRange is half the upsert key — emitting the source's 4-digit
+ * year would duplicate every existing row instead of updating it.
+ */
+function parseDateRange(text) {
+  // Three formats observed across markets, so do not tighten this regex:
+  //   "17/10/2022 to 22/10/2022"   Kalyan       slashes, spaced separator
+  //   "07-01-2019 To 11-01-2019"   Kalyan Night hyphens, capitalised "To"
+  //   "08/08/2022to14/08/2022"     Milan Day    slashes, no spaces at all
+  const match = cleanText(text).match(
+    /(\d{2})[/-](\d{2})[/-](\d{4})\s*to\s*(\d{2})[/-](\d{2})[/-](\d{4})/i
+  );
+  if (!match) return null;
+
+  const [, d1, m1, y1, d2, m2, y2] = match;
+  const start = new Date(Number(y1), Number(m1) - 1, Number(d1));
+  if (Number.isNaN(start.getTime())) return null;
+
+  return {
+    start,
+    dateRange: `${d1}/${m1}/${y1.slice(2)} to ${d2}/${m2}/${y2.slice(2)}`,
+    // A week that straddles a month boundary is filed under the month its
+    // MONDAY falls in. Deterministic, and every week appears exactly once —
+    // majority-of-days would still be ambiguous on a 3/3 split.
+    month: MONTH_NAMES[start.getMonth()],
+    year: start.getFullYear(),
+    // YYYYMMDD: sorts chronologically both within a month and globally.
+    // getHistoricalData sorts on this; existing rows have it unset, and a
+    // backfill pass fills them in.
+    index: start.getFullYear() * 10000 + (start.getMonth() + 1) * 100 + start.getDate(),
+  };
+}
+
+/**
+ * Parse a panel chart page into upsertable week rows.
+ *
+ * Rows where no day published a result are dropped: writing a week of empty
+ * cells is how the Old Chart tab ends up looking broken again, just with rows
+ * in it this time.
+ */
+function parsePanelChartHtml(html) {
+  const $ = cheerio.load(html);
+  const rows = [];
+  const skipped = { badShape: 0, badDate: 0, empty: 0 };
+
+  // Read the traded days off the header row before touching any data row.
+  let dayKeys = null;
+  $("table.panel-chart tr, table.chart-table tr").each((_, tr) => {
+    if (dayKeys) return;
+    const labels = $(tr).find("td, th").map((__, c) => cleanText($(c).text())).get();
+    if (!/^date$/i.test(labels[0] || "")) return;
+    const parsed = labels
+      .slice(1)
+      .map((l) => l.slice(0, 3).toUpperCase())
+      .filter((l) => ALL_DAY_KEYS.includes(l));
+    if (parsed.length >= 5) dayKeys = parsed;
+  });
+
+  if (!dayKeys) {
+    return { rows: [], dayKeys: [], skipped: { ...skipped, noHeader: 1 } };
+  }
+
+  const expectedCells = 1 + dayKeys.length * CELLS_PER_DAY;
+
+  $("table.panel-chart tr, table.chart-table tr").each((_, tr) => {
+    // <br> carries meaning here (it separates the panna digits) but .text()
+    // renders it as nothing. Turn it into whitespace before reading the cell.
+    $(tr).find("br").replaceWith(" ");
+    const cells = $(tr).find("td, th").map((__, cell) => cleanText($(cell).text())).get();
+
+    // Width is derived from this page's own header. Anything else is the header
+    // row itself or a layout change, and counting those is what tells us the
+    // parser has gone stale.
+    if (cells.length !== expectedCells) {
+      if (cells.length > 1) skipped.badShape += 1;
+      return;
+    }
+
+    const dates = parseDateRange(cells[0]);
+    if (!dates) {
+      skipped.badDate += 1;
+      return;
+    }
+
+    const numbers = {};
+    dayKeys.forEach((day, i) => {
+      const top = parsePanna(cells[1 + i * CELLS_PER_DAY]);
+      const main = parseJodi(cells[2 + i * CELLS_PER_DAY]);
+      const bottom = parsePanna(cells[3 + i * CELLS_PER_DAY]);
+      // The sub-schema requires all three, so a partially declared day (open
+      // panna out, close not yet) is not storable and is left absent.
+      if (top && main && bottom) numbers[day] = { top, main, bottom };
+    });
+
+    if (Object.keys(numbers).length === 0) {
+      skipped.empty += 1;
+      return;
+    }
+
+    rows.push({
+      dateRange: dates.dateRange,
+      month: dates.month,
+      year: dates.year,
+      index: dates.index,
+      numbers,
+    });
+  });
+
+  // Newest first, so a "recent weeks only" daily run takes the head.
+  rows.sort((a, b) => b.index - a.index);
+  return { rows, dayKeys, skipped };
+}
+
+/** Fetch and parse one market's panel chart. Read-only. */
+async function scrapeMarketChart(url) {
+  if (!isAllowedUrl(url)) throw new Error(`Refusing to fetch off-host URL: ${url}`);
+  const page = await fetchPage(url);
+  if (page.status !== 200 || !page.html) {
+    throw new Error(`Source returned HTTP ${page.status} for ${url}`);
+  }
+  return parsePanelChartHtml(page.html);
+}
+
+/**
+ * Upsert week rows for one market.
+ *
+ * Keyed on (gameName, dateRange) so re-running is idempotent and a re-scrape
+ * updates a week in place rather than duplicating it. gameName is uppercased by
+ * the schema, which is also why a mixed-case query from the app still matches.
+ */
+async function storeMarketChart(gameName, rows) {
+  if (rows.length === 0) return { matched: 0, upserted: 0 };
+
+  const result = await HistoricalChart.bulkWrite(
+    rows.map((row) => ({
+      updateOne: {
+        filter: { gameName: String(gameName).toUpperCase(), dateRange: row.dateRange },
+        update: {
+          $set: {
+            gameName: String(gameName).toUpperCase(),
+            month: row.month,
+            year: row.year,
+            index: row.index,
+            numbers: row.numbers,
+          },
+        },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
+
+  return {
+    matched: result.modifiedCount || 0,
+    upserted: Object.keys(result.upsertedIds || {}).length,
+  };
+}
+
+module.exports.DAY_KEYS = DAY_KEYS;
+module.exports.parsePanelChartHtml = parsePanelChartHtml;
+module.exports.parseDateRange = parseDateRange;
+module.exports.parsePanna = parsePanna;
+module.exports.parseJodi = parseJodi;
+module.exports.scrapeMarketChart = scrapeMarketChart;
+module.exports.storeMarketChart = storeMarketChart;
+module.exports.ensureMongoConnected = ensureMongoConnected;
+
+/**
+ * Panel-chart URL for a market.
+ *
+ * Confirmed against the live source for all 38 curated markets via
+ * discoverChartLinks(): every one resolves to this shape. Constructing it
+ * directly avoids a homepage fetch (371 links) on every run, which matters
+ * inside a serverless time budget. If the source ever changes its scheme,
+ * probeChartSource is still there to show the new one.
+ */
+function chartUrlFor(gameName) {
+  const slug = String(gameName || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${SOURCE_ORIGIN}/panel-chart-record/${slug}.php`;
+}
+
+/**
+ * Scrape and store charts for a slice of markets.
+ *
+ * CHUNKED DELIBERATELY. There are 38 markets and each is a separate page
+ * fetch of 150–250KB; done sequentially that is well past any serverless
+ * execution limit. The caller walks the list with offset/limit and the
+ * response hands back `nextOffset` until `done`.
+ *
+ *   mode "recent" (default) — upsert only the newest `recentWeeks` rows. This
+ *     is the daily job: the source page carries years of history but only the
+ *     last week or two can have changed.
+ *   mode "full" — upsert every row on the page. One pass per market backfills
+ *     that market's entire history, because the source publishes it all on one
+ *     page (Kalyan 202 weeks, Kalyan Night 393).
+ *
+ * A market that fails is recorded and the run continues; one dead page must not
+ * abort the other 37.
+ */
+async function updateChartsForMarkets(marketNames, options = {}) {
+  const { offset = 0, limit = 6, mode = "recent", recentWeeks = 6 } = options;
+
+  await ensureMongoConnected();
+
+  const slice = marketNames.slice(offset, offset + limit);
+  const results = [];
+  const failures = [];
+
+  for (const gameName of slice) {
+    const url = chartUrlFor(gameName);
+    try {
+      const { rows, dayKeys, skipped } = await scrapeMarketChart(url);
+      const toStore = mode === "full" ? rows : rows.slice(0, recentWeeks);
+      const written = await storeMarketChart(gameName, toStore);
+
+      results.push({
+        gameName,
+        url,
+        tradingDays: dayKeys,
+        parsedWeeks: rows.length,
+        storedWeeks: toStore.length,
+        inserted: written.upserted,
+        updated: written.matched,
+        skipped,
+      });
+    } catch (error) {
+      failures.push({ gameName, url, error: error.message });
+    }
+  }
+
+  const nextOffset = offset + slice.length;
+
+  return {
+    ok: failures.length === 0,
+    mode,
+    offset,
+    limit,
+    processed: slice.length,
+    totalMarkets: marketNames.length,
+    nextOffset,
+    done: nextOffset >= marketNames.length,
+    insertedTotal: results.reduce((sum, r) => sum + r.inserted, 0),
+    updatedTotal: results.reduce((sum, r) => sum + r.updated, 0),
+    results,
+    failureCount: failures.length,
+    failures,
+  };
+}
+
+module.exports.chartUrlFor = chartUrlFor;
+module.exports.updateChartsForMarkets = updateChartsForMarkets;

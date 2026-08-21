@@ -37,13 +37,20 @@ const HistoricalChartSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    // Markets do not all trade the same days. The source publishes Mon–Fri for
+    // Kalyan Night, Mon–Sat for Kalyan, and Mon–Sun for Milan Day, Padmavathi
+    // Night and Old Main Mumbai. SUN was missing here, so a Sunday result for
+    // those markets had nowhere to go — every day the source publishes needs a
+    // field or the scrape silently discards it. Days a market does not trade
+    // are simply absent on the document.
     numbers: {
       MON: DailyResultSchema,
       TUE: DailyResultSchema,
       WED: DailyResultSchema,
       THU: DailyResultSchema,
       FRI: DailyResultSchema,
-      SAT: DailyResultSchema
+      SAT: DailyResultSchema,
+      SUN: DailyResultSchema
     },
     index: {
       type: Number

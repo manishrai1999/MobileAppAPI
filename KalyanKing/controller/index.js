@@ -10,6 +10,7 @@ const {
   discoverChartLinks,
   describeChartPage,
   matchMarketsToChartLinks,
+  updateChartsForMarkets,
 } = require("../../KalyanChartScraper");
 
 const getLiveResults = async (req, res) => {
@@ -180,6 +181,59 @@ const probeChartSource = async (req, res) => {
   }
 };
 
+/**
+ * Scrape the panel charts and upsert them into historicalchart.
+ *
+ *   GET /KalyanKing/autoUpdateHistoricalChart
+ *       ?offset=0        market index to start at        (default 0)
+ *       &limit=6         markets per invocation          (default 6)
+ *       &mode=recent     recent | full                   (default recent)
+ *       &recentWeeks=6   weeks to upsert in recent mode  (default 6)
+ *
+ * CHUNKED ON PURPOSE. 38 markets at ~200KB a page cannot be fetched
+ * sequentially inside a serverless execution limit, so the caller walks the
+ * list using `nextOffset` from the response until `done` is true.
+ *
+ * Daily cron: mode=recent, called repeatedly until done.
+ * Backfill:   mode=full — one pass per market loads its whole history, since
+ *             the source publishes every week on a single page.
+ *
+ * Ordering matches getLiveResults so offsets stay stable between calls.
+ */
+const autoUpdateHistoricalChart = async (req, res) => {
+  try {
+    const toInt = (value, fallback) => {
+      const parsed = Number.parseInt(String(value ?? ""), 10);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+    };
+
+    const markets = await LiveResult.find({}, "gameName")
+      .sort({ priority: -1, gameName: 1 })
+      .lean();
+
+    const summary = await updateChartsForMarkets(
+      markets.map((doc) => doc.gameName),
+      {
+        offset: toInt(req.query.offset, 0),
+        // Capped: a caller asking for all 38 in one go would time out and look
+        // like a source failure rather than a budget problem.
+        limit: Math.min(toInt(req.query.limit, 6), 10),
+        mode: req.query.mode === "full" ? "full" : "recent",
+        recentWeeks: Math.min(toInt(req.query.recentWeeks, 6), 60),
+      }
+    );
+
+    // 207 when some markets failed but others were written — the run partially
+    // succeeded and the caller should still advance to nextOffset.
+    return res.status(summary.ok ? 200 : 207).json(summary);
+  } catch (error) {
+    console.error("Historical chart update failed:", error.message);
+    return res
+      .status(500)
+      .json({ message: "Historical chart update failed", error: error.message });
+  }
+};
+
 const probeSource = async (req, res) => {
   try {
     const report = await probeSourceVsDatabase();
@@ -193,6 +247,7 @@ const probeSource = async (req, res) => {
 module.exports = {
   probeSource,
   probeChartSource,
+  autoUpdateHistoricalChart,
   getLiveResults,
   updateLiveResult,
   getLuckyNumber,

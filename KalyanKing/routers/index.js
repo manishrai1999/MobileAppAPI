@@ -8,7 +8,8 @@ const {
   getTestingLiveResults,
   getHistoricalData,
   probeSource,
-  probeChartSource
+  probeChartSource,
+  autoUpdateHistoricalChart
 } = require("../controller");
 
 router.get("/liveResults", getLiveResults);
@@ -30,6 +31,9 @@ router.get("/probeSource", probeSource);
 // Read-only diagnostic — see the historical chart source's URLs and markup.
 // Must run server-side: the source blocks residential IPs.
 router.get("/probeChartSource", probeChartSource);
+
+// Scrape + upsert the panel charts. Chunked via offset/limit — see controller.
+router.get("/autoUpdateHistoricalChart", autoUpdateHistoricalChart);
 
 module.exports = router;
 
