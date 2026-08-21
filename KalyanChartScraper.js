@@ -654,31 +654,44 @@ module.exports.updateChartsForMarkets = updateChartsForMarkets;
 async function cleanupSupersededChartRows({ apply = false } = {}) {
   await ensureMongoConnected();
 
-  const legacy = await HistoricalChart.find({
-    $or: [{ index: { $exists: false } }, { index: null }],
-  })
-    .select("_id gameName dateRange")
-    .lean();
+  // Canonical form of a week, so rows written by different hands compare equal.
+  // The legacy data is inconsistent in three separate ways at once:
+  //   "27/04/2026 to 02/05/2026"  four-digit year
+  //   "31/12/12 to 5/01/13"       single-digit day, no zero padding
+  //   "07-01-2019 To 11-01-2019"  hyphens, capitalised separator
+  // Matching on the raw string treats all of these as different weeks, which is
+  // how the backfill managed to duplicate rows instead of updating them.
+  const canonicalWeek = (range) => {
+    const dates = String(range || "").match(/(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/g) || [];
+    return dates
+      .map((date) => {
+        const [d, m, y] = date.split(/[/-]/);
+        return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y.slice(-2)}`;
+      })
+      .join(" to ");
+  };
 
-  // Two-digit-year form of a dateRange, whatever form it arrived in.
-  const normalise = (range) =>
-    String(range || "").replace(/\b(\d{2})[/-](\d{2})[/-]\d{2}(\d{2})\b/g, "$1/$2/$3");
+  const [legacy, scraped] = await Promise.all([
+    HistoricalChart.find({ $or: [{ index: { $exists: false } }, { index: null }] })
+      .select("_id gameName dateRange")
+      .lean(),
+    // One pass instead of a findOne per legacy row: the per-row version issued
+    // ~500 queries and took 100s, close enough to the function limit to fail.
+    HistoricalChart.find({ index: { $exists: true, $ne: null } })
+      .select("gameName dateRange")
+      .lean(),
+  ]);
+
+  const scrapedKeys = new Set(
+    scraped.map((row) => `${row.gameName}|${canonicalWeek(row.dateRange)}`)
+  );
 
   const superseded = [];
   const orphans = [];
 
   for (const row of legacy) {
-    const target = normalise(row.dateRange);
-    // eslint-disable-next-line no-await-in-loop
-    const replacement = await HistoricalChart.findOne({
-      gameName: row.gameName,
-      dateRange: target,
-      index: { $exists: true, $ne: null },
-    })
-      .select("_id")
-      .lean();
-
-    if (replacement) superseded.push(row);
+    const key = `${row.gameName}|${canonicalWeek(row.dateRange)}`;
+    if (scrapedKeys.has(key)) superseded.push(row);
     else orphans.push({ gameName: row.gameName, dateRange: row.dateRange });
   }
 
@@ -693,16 +706,18 @@ async function cleanupSupersededChartRows({ apply = false } = {}) {
   return {
     applied: apply,
     legacyRows: legacy.length,
+    scrapedRows: scraped.length,
     supersededCount: superseded.length,
     deleted,
-    // Legacy rows with NO scraped equivalent — a week the source no longer
-    // publishes. Left alone: deleting these would lose data, not de-duplicate.
+    // Legacy rows with NO scraped equivalent. KALYAN was hand-entered back to
+    // 2013 and the source publishes only ~4 years, so most of these are real
+    // history the scrape cannot replace. Never deleted.
     orphanCount: orphans.length,
-    orphans: orphans.slice(0, 50),
+    orphanSample: orphans.slice(0, 5),
     sample: superseded.slice(0, 10).map((r) => ({
       gameName: r.gameName,
       legacy: r.dateRange,
-      replacedBy: normalise(r.dateRange),
+      canonical: canonicalWeek(r.dateRange),
     })),
   };
 }
