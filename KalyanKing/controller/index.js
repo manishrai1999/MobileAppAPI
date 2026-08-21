@@ -6,6 +6,11 @@ const {
   getTestingLiveResults: getTestingLiveResultsFromCollection,
   probeSourceVsDatabase,
 } = require("../../KalyanAutoUpdateResult");
+const {
+  discoverChartLinks,
+  describeChartPage,
+  matchMarketsToChartLinks,
+} = require("../../KalyanChartScraper");
 
 const getLiveResults = async (req, res) => {
   // priority = persistent importance tier; isTop = whichever result landed most
@@ -131,6 +136,50 @@ const getTestingLiveResults = async (req, res) => {
 
 // Read-only diagnostic: which markets the source publishes that we don't store.
 // Runs server-side because the source blocks non-datacenter IPs. Writes nothing.
+/**
+ * Read-only diagnostic for the historical chart source.
+ *
+ * The `historicalchart` collection has had nothing written to it since December
+ * 2025 and there has never been a writer for it, so Old Chart is empty for
+ * every 2026 month. Before a parser can be written, somebody has to see the
+ * markup — and the source blocks residential IPs, so that has to happen from
+ * the server. Same reason probeSource exists.
+ *
+ *   GET /KalyanKing/probeChartSource            → chart URLs found on the homepage
+ *   GET /KalyanKing/probeChartSource?url=<enc>  → table structure of that page
+ *
+ * Writes nothing.
+ */
+const probeChartSource = async (req, res) => {
+  try {
+    const { url } = req.query;
+
+    if (url) {
+      const report = await describeChartPage(String(url));
+      return res.status(report.ok ? 200 : 502).json(report);
+    }
+
+    const report = await discoverChartLinks();
+    if (!report.ok) return res.status(502).json(report);
+
+    // Coverage is every curated market, so report which of them the source
+    // actually publishes a chart for. Names come from the live-results
+    // collection — the same list the app shows.
+    const markets = await LiveResult.find({}, "gameName").lean();
+    report.marketCoverage = matchMarketsToChartLinks(
+      markets.map((doc) => doc.gameName),
+      report.allChartLinks
+    );
+
+    return res.status(200).json(report);
+  } catch (error) {
+    console.error("Probe chart source failed:", error.message);
+    return res
+      .status(500)
+      .json({ message: "Probe chart source failed", error: error.message });
+  }
+};
+
 const probeSource = async (req, res) => {
   try {
     const report = await probeSourceVsDatabase();
@@ -143,6 +192,7 @@ const probeSource = async (req, res) => {
 
 module.exports = {
   probeSource,
+  probeChartSource,
   getLiveResults,
   updateLiveResult,
   getLuckyNumber,

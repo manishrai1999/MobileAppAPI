@@ -7,7 +7,8 @@ const {
   autoUpdateLiveResult,
   getTestingLiveResults,
   getHistoricalData,
-  probeSource
+  probeSource,
+  probeChartSource
 } = require("../controller");
 
 router.get("/liveResults", getLiveResults);
@@ -25,6 +26,10 @@ router.get("/testingLiveResults", getTestingLiveResults);
 
 // Read-only diagnostic — see which markets the source has that we don't store.
 router.get("/probeSource", probeSource);
+
+// Read-only diagnostic — see the historical chart source's URLs and markup.
+// Must run server-side: the source blocks residential IPs.
+router.get("/probeChartSource", probeChartSource);
 
 module.exports = router;
 
